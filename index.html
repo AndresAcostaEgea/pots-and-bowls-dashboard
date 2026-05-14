@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Pots &amp; Bowls — Panel de Inteligencia</title>
+<script>if(!sessionStorage.getItem('pb_auth'))window.location.replace('login.html');</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet"/>
+<script src="data.js"></script>
+<style>
+  :root{--pb-green:#2d6a4f;--pb-light:#95d5b2;--pb-dark:#1b4332;}
+  body{background:#f8fafc;font-family:'Segoe UI',sans-serif;}
+  .nav-btn{transition:all .2s;}
+  .nav-btn.active{background:var(--pb-green);color:#fff;}
+  .nav-btn:not(.active):hover{background:#e2e8f0;}
+  .card{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:1.25rem;}
+  .kpi{border-left:4px solid var(--pb-green);}
+  .strength{color:#166534;background:#dcfce7;}
+  .weakness{color:#991b1b;background:#fee2e2;}
+  .ok{color:#92400e;background:#fef3c7;}
+  .priority-High{border-left:4px solid #dc2626;}
+  .priority-Medium{border-left:4px solid #d97706;}
+  .priority-Low{border-left:4px solid #2563eb;}
+  .section{display:none;}.section.active{display:block;}
+  canvas{max-height:340px;}
+  .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:.75rem;font-weight:600;margin:2px;}
+  .narrative{background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-left:4px solid var(--pb-green);border-radius:0 10px 10px 0;padding:.9rem 1.1rem;margin-bottom:1rem;}
+  .narrative-title{font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:#2d6a4f;font-weight:700;margin-bottom:.3rem;}
+  .narrative p{font-size:.85rem;color:#374151;line-height:1.55;margin-bottom:.4rem;}
+  .narrative p:last-child{margin-bottom:0;}
+  .insight-callout{display:inline-flex;align-items:flex-start;gap:.5rem;background:#fff;border:1px solid #86efac;border-radius:8px;padding:.4rem .75rem;margin-top:.5rem;font-size:.8rem;color:#166534;}
+  .section-narrative{background:#1b4332;color:#d8f3dc;border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.5rem;}
+  .section-narrative h2{font-size:1.1rem;font-weight:700;color:#95d5b2;margin-bottom:.4rem;}
+  .section-narrative p{font-size:.85rem;line-height:1.6;color:#b7e4c7;}
+  /* Filter bar */
+  .filter-select{border:1.5px solid #d1d5db;border-radius:8px;padding:.3rem .7rem;font-size:.82rem;color:#374151;background:#fff;cursor:pointer;}
+  .filter-select:focus{outline:none;border-color:var(--pb-green);}
+  .loc-btn.active-loc{background:var(--pb-green);color:#fff;border-color:var(--pb-green);}
+  /* Footer */
+  footer{background:#1b4332;color:#d8f3dc;text-align:center;padding:2rem 1rem 1.5rem;}
+  footer img{height:72px;margin:0 auto .8rem;display:block;opacity:.92;}
+  footer p{font-size:.82rem;color:#95d5b2;letter-spacing:.02em;}
+  footer .brand-name{font-size:.95rem;font-weight:600;color:#d8f3dc;margin-top:.25rem;}
+</style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+<!-- Encabezado -->
+<header style="background:var(--pb-dark)" class="text-white px-6 py-3 flex items-center justify-between flex-shrink-0">
+  <div class="flex items-center gap-3">
+    <a href="landing.html"><img src="pab_company_logo.png" alt="Pots &amp; Bowls" style="height:46px;"/></a>
+    <span class="text-green-300 text-lg font-bold" style="letter-spacing:.01em;">Panel de Inteligencia</span>
+  </div>
+  <div class="text-xs text-green-300" id="metaLine"></div>
+</header>
+
+<!-- Barra de filtros combinada -->
+<div class="bg-white border-b px-4 py-2 flex flex-wrap items-center gap-x-5 gap-y-2 flex-shrink-0">
+  <!-- Ubicación -->
+  <div class="flex items-center gap-2 flex-wrap">
+    <span class="text-xs font-semibold text-gray-500">Ubicación:</span>
+    <button onclick="setLoc('All')"          class="loc-btn px-3 py-1 rounded-full text-xs font-medium border">Todas</button>
+    <button onclick="setLoc('Rohrmoser')"    class="loc-btn px-3 py-1 rounded-full text-xs font-medium border">Rohrmoser</button>
+    <button onclick="setLoc('Playa Grande')" class="loc-btn px-3 py-1 rounded-full text-xs font-medium border">Playa Grande</button>
+    <button onclick="setLoc('LasCatalinas')" class="loc-btn px-3 py-1 rounded-full text-xs font-medium border">Las Catalinas</button>
+  </div>
+  <div class="w-px h-5 bg-gray-200 hidden md:block"></div>
+  <!-- Año -->
+  <div class="flex items-center gap-2">
+    <span class="text-xs font-semibold text-gray-500">Año:</span>
+    <select id="filterYear" class="filter-select" onchange="renderAll()">
+      <option value="All">Todos</option>
+    </select>
+  </div>
+  <!-- Mes -->
+  <div class="flex items-center gap-2">
+    <span class="text-xs font-semibold text-gray-500">Mes:</span>
+    <select id="filterMonth" class="filter-select" onchange="renderAll()">
+      <option value="All">Todos</option>
+      <option value="01">Enero</option><option value="02">Febrero</option>
+      <option value="03">Marzo</option><option value="04">Abril</option>
+      <option value="05">Mayo</option><option value="06">Junio</option>
+      <option value="07">Julio</option><option value="08">Agosto</option>
+      <option value="09">Septiembre</option><option value="10">Octubre</option>
+      <option value="11">Noviembre</option><option value="12">Diciembre</option>
+    </select>
+  </div>
+  <button onclick="resetFilters()" class="text-xs px-3 py-1 rounded-full border text-green-700 hover:bg-green-50 ml-auto">↺ Restablecer</button>
+</div>
+
+<!-- Navegación -->
+<nav class="bg-white border-b px-6 py-2 flex gap-2 flex-wrap flex-shrink-0">
+  <button onclick="showSection('overview')"  class="nav-btn active px-4 py-2 rounded-lg text-sm font-medium" id="nav-overview">Resumen</button>
+  <button onclick="showSection('pulse')"     class="nav-btn px-4 py-2 rounded-lg text-sm font-medium" id="nav-pulse">Pulso de Reseñas</button>
+  <button onclick="showSection('themes')"    class="nav-btn px-4 py-2 rounded-lg text-sm font-medium" id="nav-themes">Explorador de Temas</button>
+  <button onclick="showSection('insights')"  class="nav-btn px-4 py-2 rounded-lg text-sm font-medium" id="nav-insights">Insights Accionables</button>
+  <button onclick="showSection('social')"    class="nav-btn px-4 py-2 rounded-lg text-sm font-medium" id="nav-social">Señales Sociales</button>
+</nav>
+
+<main class="px-4 py-6 max-w-7xl mx-auto w-full flex-grow">
+
+<!-- ═══ RESUMEN ═══ -->
+<section id="section-overview" class="section active">
+  <div class="section-narrative">
+    <h2>¿Cómo perciben los clientes a Pots &amp; Bowls?</h2>
+    <p>Analizamos <strong>1,026 reseñas</strong> de Google Maps y TripAdvisor en 3 ubicaciones, combinadas con 3,299 comentarios de Instagram. Usa los filtros de Ubicación, Año y Mes para ver el análisis de un período específico.</p>
+  </div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="kpiGrid"></div>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+    <div class="card">
+      <div class="narrative">
+        <div class="narrative-title">Análisis · Calificación por Fuente</div>
+        <p>Comparamos la calificación promedio de Google Maps y TripAdvisor por ubicación. Una brecha mayor a 0.5★ entre fuentes indica que el cliente en persona tiene una experiencia diferente a la que refleja la reputación en línea.</p>
+        <div class="insight-callout">💡 <span><strong>Las Catalinas:</strong> brecha de 0.61★ entre Google (4.16) y TripAdvisor (4.77) — la más alta del grupo.</span></div>
+      </div>
+      <h3 class="font-semibold text-gray-700 mb-3">Calificación Promedio por Ubicación y Fuente</h3>
+      <canvas id="overviewRatingChart"></canvas>
+    </div>
+    <div class="card">
+      <div class="narrative">
+        <div class="narrative-title">Análisis · Sentimiento Global</div>
+        <p>Positiva (≥4★), Neutral (3★) o Negativa (≤2★). El objetivo saludable es mantener el segmento negativo por debajo del 10%. Las reseñas neutras representan la mayor oportunidad: convertirlas en 5★ eleva el promedio directamente.</p>
+        <div class="insight-callout">💡 <span>El segmento neutral es la mayor oportunidad de mejora inmediata.</span></div>
+      </div>
+      <h3 class="font-semibold text-gray-700 mb-3">Desglose de Sentimiento</h3>
+      <canvas id="overviewSentChart"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <div class="narrative">
+      <div class="narrative-title">Análisis · Evolución de la Reputación</div>
+      <p>La tendencia revela si la marca está mejorando o deteriorándose. Al seleccionar un año específico, el gráfico cambia para mostrar la tendencia <strong>mes a mes</strong> de ese año.</p>
+      <div class="insight-callout">💡 <span>Selecciona un año en el filtro superior para ver la evolución mensual de ese período.</span></div>
+    </div>
+    <h3 class="font-semibold text-gray-700 mb-3" id="trendChartTitle">Tendencia de Calificación por Año</h3>
+    <canvas id="yearTrendChart"></canvas>
+  </div>
+</section>
+
+<!-- ═══ PULSO DE RESEÑAS ═══ -->
+<section id="section-pulse" class="section">
+  <div class="section-narrative">
+    <h2>El pulso real de cada ubicación</h2>
+    <p>La distribución de estrellas y los platos más mencionados revelan la textura de la experiencia del cliente. Filtra por año y mes para ver cómo cambia el patrón en distintos períodos.</p>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+    <div class="card">
+      <div class="narrative">
+        <div class="narrative-title">Análisis · Distribución de Estrellas</div>
+        <p>Un perfil ideal tiene más del 70% en 5★ y menos del 5% en 1★ y 2★. Si hay concentración en 3★, el negocio es "correcto" pero no genera promotores.</p>
+        <div class="insight-callout">💡 <span>Filtra por ubicación y compara: ¿dónde se concentran los 1★?</span></div>
+      </div>
+      <h3 class="font-semibold text-gray-700 mb-3">Distribución de Calificaciones</h3>
+      <canvas id="ratingDistChart"></canvas>
+    </div>
+    <div class="card">
+      <div class="narrative">
+        <div class="narrative-title">Análisis · Identidad del Menú</div>
+        <p>Los platos más mencionados definen la identidad de la marca. Alto volumen + buena calificación = activo de marketing que debe amplificarse.</p>
+        <div class="insight-callout">💡 <span>Los platos más mencionados son los que deben protagonizar el contenido de Instagram.</span></div>
+      </div>
+      <h3 class="font-semibold text-gray-700 mb-3">Platos más Mencionados</h3>
+      <canvas id="menuChart"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <div class="narrative">
+      <div class="narrative-title">Análisis · Brecha entre Plataformas</div>
+      <p>Google refleja al cliente local; TripAdvisor captura al turista. Brechas grandes (&gt;0.5★) revelan que el tipo de visitante experimenta el local de forma diferente.</p>
+      <div class="insight-callout">💡 <span>La brecha de <strong>Las Catalinas</strong> (0.61★) es la mayor del grupo y requiere atención urgente.</span></div>
+    </div>
+    <h3 class="font-semibold text-gray-700 mb-3">Comparación por Fuente — Calificación Promedio y % Positivo</h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead><tr class="border-b text-left text-gray-500">
+          <th class="pb-2 pr-4">Ubicación</th><th class="pb-2 pr-4">Fuente</th>
+          <th class="pb-2 pr-4">Reseñas</th><th class="pb-2 pr-4">Prom. Estrellas</th>
+          <th class="pb-2">% Positivo</th>
+        </tr></thead>
+        <tbody id="sourceTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ EXPLORADOR DE TEMAS ═══ -->
+<section id="section-themes" class="section">
+  <div class="section-narrative">
+    <h2>¿De qué hablan realmente tus clientes?</h2>
+    <p>Cada reseña fue etiquetada con hasta 18 temas. Filtra por año y mes para descubrir si los temas de queja cambian según la temporada.</p>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+    <div class="card">
+      <div class="narrative">
+        <div class="narrative-title">Análisis · Volumen de Conversación por Tema</div>
+        <p>Los temas con más menciones pesan más en la percepción de la marca. Filtra por ubicación para ver si el tema #1 es diferente en cada local.</p>
+        <div class="insight-callout">💡 <span>Servicio y Calidad dominan porque son los pilares que todo cliente evalúa inconscientemente.</span></div>
+      </div>
+      <h3 class="font-semibold text-gray-700 mb-3">Frecuencia de Temas (top 15)</h3>
+      <canvas id="themeFreqChart"></canvas>
+    </div>
+    <div class="card">
+      <div class="narrative">
+        <div class="narrative-title">Análisis · Fortalezas y Debilidades Estructurales</div>
+        <p><strong>Fortaleza (≥4.5★)</strong> = ventaja competitiva. <strong>Regular (4.0–4.5★)</strong> = mejora gradual. <strong>Debilidad (&lt;4.0★)</strong> = acción urgente.</p>
+        <div class="insight-callout">💡 <span><strong>Precios</strong> (3.86★) y <strong>Servicio Lento</strong> (3.77★) son las dos debilidades más frecuentes e impactantes.</span></div>
+      </div>
+      <h3 class="font-semibold text-gray-700 mb-4">Fortalezas y Debilidades</h3>
+      <div id="themeStrGrid" class="grid grid-cols-1 gap-2 overflow-y-auto" style="max-height:320px;"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ INSIGHTS ACCIONABLES ═══ -->
+<section id="section-insights" class="section">
+  <div class="section-narrative">
+    <h2>Del análisis a la acción</h2>
+    <p>10 recomendaciones concretas priorizadas por impacto en el negocio. Los de <strong>Alta prioridad</strong> afectan directamente la calificación promedio y la percepción general.</p>
+  </div>
+  <div class="flex gap-3 mb-4 flex-wrap">
+    <span class="text-sm font-medium text-gray-500 self-center">Filtrar:</span>
+    <button onclick="filterInsights('All')"    class="ins-filter px-3 py-1 rounded-full text-sm border active-filter">Todos</button>
+    <button onclick="filterInsights('High')"   class="ins-filter px-3 py-1 rounded-full text-sm border text-red-600 font-semibold">Alta Prioridad</button>
+    <button onclick="filterInsights('Medium')" class="ins-filter px-3 py-1 rounded-full text-sm border text-yellow-700 font-semibold">Media</button>
+    <button onclick="filterInsights('Low')"    class="ins-filter px-3 py-1 rounded-full text-sm border text-blue-600 font-semibold">Baja</button>
+  </div>
+  <div id="insightCards" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+</section>
+
+<!-- ═══ SEÑALES SOCIALES ═══ -->
+<section id="section-social" class="section">
+  <div class="section-narrative">
+    <h2>9 años de conversación en Instagram</h2>
+    <p><strong>1,715 publicaciones</strong> (2017–2026) y <strong>3,299 comentarios</strong> analizados. Usa el filtro de año y mes para explorar períodos específicos.</p>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+    <div class="card">
+      <div class="narrative">
+        <div class="narrative-title">Análisis · Volumen de Publicaciones por Año</div>
+        <p>El volumen anual y el tipo de contenido revelan la consistencia de la estrategia. Una caída en publicaciones suele correlacionarse con menor alcance orgánico.</p>
+        <div class="insight-callout">💡 <span>Al menos 3–4 posts semanales es el mínimo para mantener al algoritmo activo.</span></div>
+      </div>
+      <h3 class="font-semibold text-gray-700 mb-3">Publicaciones por Año y Tipo</h3>
+      <canvas id="igYearChart"></canvas>
+    </div>
+    <div class="card">
+      <div class="narrative">
+        <div class="narrative-title">Análisis · Formato Óptimo de Contenido</div>
+        <p>Carruseles generan mayor tiempo de visualización; videos amplían el alcance orgánico; imágenes reciben más likes directos.</p>
+        <div class="insight-callout">💡 <span>Si los videos son menos del 15% del contenido, hay oportunidad de crecer con más Reels.</span></div>
+      </div>
+      <h3 class="font-semibold text-gray-700 mb-3">Desglose por Tipo de Publicación</h3>
+      <canvas id="igTypeChart"></canvas>
+    </div>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="card">
+      <div class="narrative">
+        <div class="narrative-title">Análisis · Contenido de Mayor Impacto</div>
+        <p>Los posts con más likes son plantillas de éxito replicables. El filtro de año/mes muestra qué funcionó en cada período.</p>
+      </div>
+      <h3 class="font-semibold text-gray-700 mb-3">Publicaciones con más Me gusta</h3>
+      <div class="overflow-y-auto" style="max-height:320px;">
+        <table class="w-full text-xs">
+          <thead><tr class="border-b text-gray-500"><th class="pb-1 text-left">Fecha</th><th class="pb-1 text-left">Tipo</th><th class="pb-1">Me gusta</th><th class="pb-1">Comentarios</th></tr></thead>
+          <tbody id="topPostsBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="narrative">
+        <div class="narrative-title">Análisis · Voz de la Comunidad</div>
+        <p>Los comentarios con más likes son testimonios auténticos. Úsalos en marketing con permiso del usuario.</p>
+        <div class="insight-callout">💡 <span>Los comentarios positivos más populares son publicidad gratuita.</span></div>
+      </div>
+      <h3 class="font-semibold text-gray-700 mb-3">Comentarios con más Me gusta</h3>
+      <div class="overflow-y-auto" style="max-height:320px;" id="topCommentsList"></div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- Footer -->
+<footer>
+  <img src="aae_logo.png" alt="AAE" style="filter:brightness(0) invert(1);"/>
+  <p class="brand-name">Andrés Acosta Egea</p>
+  <p>Inteligencia de datos &amp; estrategia digital</p>
+</footer>
+
+<script>
+// ─── State ───
+let currentLoc = 'All';
+let currentInsightFilter = 'All';
+const charts = {};
+
+// ─── Translation maps ───
+const TEMAS = {
+  'FoodQuality':'Calidad de Comida','Service':'Servicio','Atmosphere':'Ambiente',
+  'Food Items':'Platos','Drinks':'Bebidas','WaitTime':'Tiempo de Espera',
+  'Pricing':'Precios','Breakfast':'Desayuno','HealthyFresh':'Saludable/Fresco',
+  'Menu':'Menú','RepeatVisit':'Visita Repetida','Tourist/Location':'Turismo/Ubicación',
+  'Coffee':'Café','General':'General','Portions':'Porciones',
+  'Food Quality Issue':'Problema de Calidad','Location':'Ubicación','Family':'Familia',
+  'Desserts':'Postres','Gift Store':'Tienda de Regalos','Dietary Options':'Opciones Dietéticas',
+  'Family/Pet Friendly':'Familiar/Mascotas','Slow Service':'Servicio Lento',
+  'Cleanliness':'Limpieza','Live Music':'Música en Vivo','WorkMeetings':'Reuniones de Trabajo',
+  'AllergyIncident':'Incidente de Alergia','Romantic':'Romántico','Remote Work':'Trabajo Remoto',
+  'Parking':'Estacionamiento','Operations':'Operaciones','Events':'Eventos',
+};
+const t = n => TEMAS[n] || n;
+const PRIORIDAD = {High:'Alta',Medium:'Media',Low:'Baja'};
+const SENTIMIENTO = {Positive:'Positivo',Neutral:'Neutral',Negative:'Negativo'};
+const CALIFICACION = {Strength:'Fortaleza',Weakness:'Debilidad',OK:'Regular'};
+const COLORS = ['#2d6a4f','#52b788','#95d5b2','#d8f3dc','#b7e4c7','#74c69d','#40916c','#1b4332'];
+const SENT_COLORS = {Positive:'#22c55e',Neutral:'#eab308',Negative:'#ef4444'};
+
+// ─── Populate year selector ───
+(function initYears(){
+  const years = [...new Set(DATA.rawReviews.map(r=>r.Yr).filter(Boolean))].sort();
+  const sel = document.getElementById('filterYear');
+  years.forEach(y=>sel.add(new Option(y,y)));
+})();
+
+// ─── Get current filter values ───
+function getFilters(){
+  return {
+    loc: currentLoc,
+    yr: document.getElementById('filterYear').value,
+    mo: document.getElementById('filterMonth').value,
+  };
+}
+
+// ─── Filter rawReviews ───
+function filteredReviews(){
+  const {loc,yr,mo} = getFilters();
+  return DATA.rawReviews.filter(r =>
+    (loc==='All' || r.Loc===loc) &&
+    (yr==='All'  || r.Yr===yr)  &&
+    (mo==='All'  || r.Mo===mo)
+  );
+}
+
+// ─── Filter topPosts ───
+function filteredPosts(){
+  const {yr,mo} = getFilters();
+  return DATA.topPosts.filter(p=>{
+    if(!p.Date) return false;
+    const py = p.Date.substring(0,4);
+    const pm = p.Date.substring(5,7);
+    return (yr==='All'||py===yr) && (mo==='All'||pm===mo);
+  });
+}
+
+// ─── Filter topComments ───
+function filteredComments(){
+  const {yr,mo} = getFilters();
+  return DATA.topComments.filter(c=>{
+    if(!c.Date) return false;
+    const cy = c.Date.substring(0,4);
+    const cm = c.Date.substring(5,7);
+    return (yr==='All'||cy===yr) && (mo==='All'||cm===mo);
+  });
+}
+
+// ─── Navigation ───
+function showSection(id){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('section-'+id).classList.add('active');
+  document.getElementById('nav-'+id).classList.add('active');
+}
+
+// ─── Location filter ───
+function setLoc(loc){
+  currentLoc=loc;
+  document.querySelectorAll('.loc-btn').forEach(b=>{
+    const txt=b.textContent.trim();
+    const active=(loc==='All'&&txt==='Todas')||(loc==='Rohrmoser'&&txt==='Rohrmoser')||
+                 (loc==='Playa Grande'&&txt==='Playa Grande')||(loc==='LasCatalinas'&&txt==='Las Catalinas');
+    b.style.background=active?'#2d6a4f':'';
+    b.style.color=active?'#fff':'';
+    b.style.borderColor=active?'#2d6a4f':'';
+  });
+  renderAll();
+}
+
+function resetFilters(){
+  currentLoc='All';
+  document.getElementById('filterYear').value='All';
+  document.getElementById('filterMonth').value='All';
+  document.querySelectorAll('.loc-btn').forEach((b,i)=>{
+    b.style.background=i===0?'#2d6a4f':'';
+    b.style.color=i===0?'#fff':'';
+    b.style.borderColor=i===0?'#2d6a4f':'';
+  });
+  renderAll();
+}
+
+// ─── Chart helper ───
+function mkChart(id,config){
+  if(charts[id])charts[id].destroy();
+  const ctx=document.getElementById(id);if(!ctx)return;
+  charts[id]=new Chart(ctx,config);
+}
+
+// ═══════════════════════════════
+// KPIs — computed from rawReviews
+// ═══════════════════════════════
+function renderKPIs(){
+  const rows = filteredReviews();
+  const total = rows.length || 1;
+  const avgStars = rows.length ? (rows.reduce((s,r)=>s+r.St,0)/total).toFixed(2) : '—';
+  const pos = rows.filter(r=>r.Snt==='Positive').length;
+  const posPct = rows.length ? (pos/total*100).toFixed(1) : '—';
+  // Posts count filtered
+  const postCount = filteredPosts().length;
+  const commentCount = filteredComments().length;
+
+  const kpis=[
+    {label:'Reseñas en período',  value:rows.length.toLocaleString('es'), sub:'Google + TripAdvisor'},
+    {label:'Calificación Promedio',value:avgStars+' ★',                  sub:'En todas las fuentes'},
+    {label:'Reseñas Positivas',   value:posPct+'%',                       sub:'Sentimiento 4+ estrellas'},
+    {label:'Comentarios Instagram',value:commentCount.toLocaleString('es'),sub:'De '+postCount+' publicaciones'},
+  ];
+  document.getElementById('kpiGrid').innerHTML=kpis.map(k=>`
+    <div class="card kpi">
+      <div class="text-2xl font-bold text-gray-800">${k.value}</div>
+      <div class="text-sm font-semibold text-gray-600 mt-1">${k.label}</div>
+      <div class="text-xs text-gray-400">${k.sub}</div>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════
+// Overview charts
+// ═══════════════════════════════
+function renderOverviewCharts(){
+  const rows = filteredReviews();
+  // Group by Loc+Src
+  const groups = {};
+  rows.forEach(r=>{
+    const key=r.Loc+'|||'+r.Src;
+    if(!groups[key]) groups[key]={loc:r.Loc,src:r.Src,sum:0,cnt:0};
+    groups[key].sum+=r.St; groups[key].cnt++;
+  });
+  const cs = Object.values(groups).sort((a,b)=>a.loc.localeCompare(b.loc)||a.src.localeCompare(b.src));
+  const labels = cs.map(d=>d.loc.replace('LasCatalinas','Las Catalinas')+' / '+d.src);
+  const avgs = cs.map(d=>+(d.sum/d.cnt).toFixed(2));
+  mkChart('overviewRatingChart',{
+    type:'bar',
+    data:{labels,datasets:[{label:'Prom. Estrellas',data:avgs,backgroundColor:COLORS}]},
+    options:{plugins:{legend:{display:false}},scales:{y:{min:1,max:5,ticks:{stepSize:.5}}}}
+  });
+
+  const sentTotals={Positive:0,Neutral:0,Negative:0};
+  rows.forEach(r=>{if(sentTotals[r.Snt]!==undefined)sentTotals[r.Snt]++;});
+  mkChart('overviewSentChart',{
+    type:'doughnut',
+    data:{labels:Object.keys(sentTotals).map(k=>SENTIMIENTO[k]),datasets:[{data:Object.values(sentTotals),backgroundColor:Object.keys(sentTotals).map(k=>SENT_COLORS[k])}]},
+    options:{plugins:{legend:{position:'bottom'}}}
+  });
+}
+
+// ═══════════════════════════════
+// Trend chart — yearly or monthly
+// ═══════════════════════════════
+function renderYearTrend(){
+  const {loc,yr,mo} = getFilters();
+  const baseRows = DATA.rawReviews.filter(r=>(loc==='All'||r.Loc===loc)&&(mo==='All'||r.Mo===mo));
+  const MESES=['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+  if(yr!=='All'){
+    // Monthly trend for selected year
+    document.getElementById('trendChartTitle').textContent=`Tendencia Mensual — ${yr}`;
+    const months=['01','02','03','04','05','06','07','08','09','10','11','12'];
+    const locs=loc==='All'?['Rohrmoser','Playa Grande','LasCatalinas']:[loc];
+    const datasets=locs.map((l,i)=>({
+      label:l.replace('LasCatalinas','Las Catalinas'),
+      data:months.map(m=>{
+        const g=baseRows.filter(r=>r.Yr===yr&&r.Loc===l&&r.Mo===m);
+        return g.length?+(g.reduce((s,r)=>s+r.St,0)/g.length).toFixed(2):null;
+      }),
+      borderColor:COLORS[i],backgroundColor:COLORS[i]+'33',tension:.4,fill:false,spanGaps:true
+    }));
+    mkChart('yearTrendChart',{type:'line',data:{labels:months.map(m=>MESES[+m]),datasets},options:{plugins:{legend:{position:'bottom'}},scales:{y:{min:1,max:5,ticks:{stepSize:.5}}}}});
+  } else {
+    // Yearly trend
+    document.getElementById('trendChartTitle').textContent='Tendencia de Calificación por Año';
+    const years=[...new Set(baseRows.map(r=>r.Yr).filter(Boolean))].sort();
+    const locs=loc==='All'?['Rohrmoser','Playa Grande','LasCatalinas']:[loc];
+    const datasets=locs.map((l,i)=>({
+      label:l.replace('LasCatalinas','Las Catalinas'),
+      data:years.map(y=>{
+        const g=baseRows.filter(r=>r.Yr===y&&r.Loc===l);
+        return g.length?+(g.reduce((s,r)=>s+r.St,0)/g.length).toFixed(2):null;
+      }),
+      borderColor:COLORS[i],backgroundColor:COLORS[i]+'33',tension:.4,fill:false,spanGaps:true
+    }));
+    mkChart('yearTrendChart',{type:'line',data:{labels:years,datasets},options:{plugins:{legend:{position:'bottom'}},scales:{y:{min:1,max:5,ticks:{stepSize:.5}}}}});
+  }
+}
+
+// ═══════════════════════════════
+// Rating distribution
+// ═══════════════════════════════
+function renderRatingDist(){
+  const rows=filteredReviews();
+  const counts=[1,2,3,4,5].map(s=>rows.filter(r=>r.St===s).length);
+  mkChart('ratingDistChart',{
+    type:'bar',
+    data:{labels:['1 ★','2 ★','3 ★','4 ★','5 ★'],datasets:[{label:'Reseñas',data:counts,backgroundColor:['#ef4444','#f97316','#eab308','#86efac','#22c55e']}]},
+    options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}
+  });
+}
+
+// ═══════════════════════════════
+// Menu mentions
+// ═══════════════════════════════
+function renderMenu(){
+  const rows=filteredReviews();
+  const menuCount={};
+  rows.forEach(r=>{
+    if(!r.Mn)return;
+    (r.Mn.replace(/; /g,'|').split('|')).forEach(m=>{
+      if(m){menuCount[m]=(menuCount[m]||0)+1;}
+    });
+  });
+  const menu=Object.entries(menuCount).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  if(!menu.length){mkChart('menuChart',{type:'bar',data:{labels:['Sin datos'],datasets:[{data:[0]}]},options:{}});return;}
+  mkChart('menuChart',{
+    type:'bar',
+    data:{labels:menu.map(d=>d[0]),datasets:[{label:'Menciones',data:menu.map(d=>d[1]),backgroundColor:'#52b788'}]},
+    options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true}}}
+  });
+}
+
+// ═══════════════════════════════
+// Source comparison table
+// ═══════════════════════════════
+function renderSourceTable(){
+  const rows=filteredReviews();
+  const groups={};
+  rows.forEach(r=>{
+    const key=r.Loc+'|||'+r.Src;
+    if(!groups[key])groups[key]={loc:r.Loc,src:r.Src,sum:0,pos:0,cnt:0};
+    groups[key].sum+=r.St; groups[key].cnt++;
+    if(r.Snt==='Positive')groups[key].pos++;
+  });
+  const cs=Object.values(groups).sort((a,b)=>a.loc.localeCompare(b.loc)||a.src.localeCompare(b.src));
+  document.getElementById('sourceTableBody').innerHTML=cs.map(d=>{
+    const avg=+(d.sum/d.cnt).toFixed(2);
+    const pct=+(d.pos/d.cnt*100).toFixed(1);
+    const color=avg>=4.5?'#166534':avg>=4.0?'#92400e':'#991b1b';
+    return`<tr class="border-b hover:bg-gray-50">
+      <td class="py-2 pr-4 font-medium">${d.loc.replace('LasCatalinas','Las Catalinas')}</td>
+      <td class="py-2 pr-4">${d.src}</td>
+      <td class="py-2 pr-4">${d.cnt}</td>
+      <td class="py-2 pr-4 font-bold" style="color:${color}">${avg} ★</td>
+      <td class="py-2">${pct}%</td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="5" class="py-4 text-center text-gray-400">Sin reseñas para este filtro.</td></tr>';
+}
+
+// ═══════════════════════════════
+// Theme frequency
+// ═══════════════════════════════
+function renderThemes(){
+  const rows=filteredReviews();
+  // Theme frequency
+  const thCount={};
+  rows.forEach(r=>{
+    if(!r.Th)return;
+    (r.Th.replace(/; /g,'|').split('|')).forEach(th=>{
+      if(th){thCount[th]=(thCount[th]||{cnt:0,sum:0,n:0});thCount[th].cnt++;thCount[th].sum+=r.St;thCount[th].n++;}
+    });
+  });
+  const tf=Object.entries(thCount).sort((a,b)=>b[1].cnt-a[1].cnt).slice(0,15);
+  mkChart('themeFreqChart',{
+    type:'bar',
+    data:{labels:tf.map(d=>t(d[0])),datasets:[{label:'Menciones',data:tf.map(d=>d[1].cnt),backgroundColor:'#52b788'}]},
+    options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true}}}
+  });
+
+  // Theme strength grid
+  const allTh=Object.entries(thCount).map(([name,v])=>({
+    name,cnt:v.cnt,avg:+(v.sum/v.n).toFixed(2),
+    rating:v.sum/v.n>=4.5?'Strength':v.sum/v.n>=4?'OK':'Weakness'
+  })).sort((a,b)=>b.cnt-a.cnt).slice(0,20);
+  document.getElementById('themeStrGrid').innerHTML=allTh.map(d=>{
+    const cls=d.rating==='Strength'?'strength':d.rating==='Weakness'?'weakness':'ok';
+    return`<div class="flex items-center justify-between p-2 rounded-lg ${cls}">
+      <span class="font-medium text-sm">${t(d.name)}</span>
+      <div class="text-right"><span class="font-bold text-sm">${d.avg}★</span><span class="text-xs ml-2">${d.cnt} reseñas</span><span class="ml-2 pill ${cls}">${CALIFICACION[d.rating]}</span></div>
+    </div>`;
+  }).join('')||'<p class="text-gray-400 text-center py-4">Sin datos para este filtro.</p>';
+}
+
+// ═══════════════════════════════
+// Insights (static, filter by loc only)
+// ═══════════════════════════════
+function filterInsights(priority){
+  currentInsightFilter=priority;
+  document.querySelectorAll('.ins-filter').forEach(b=>b.classList.remove('active-filter','font-bold'));
+  event.target.classList.add('active-filter','font-bold');
+  renderInsights();
+}
+function renderInsights(){
+  let ins=DATA.insights;
+  if(currentLoc!=='All')ins=ins.filter(d=>d.Location===currentLoc||d.Location==='All');
+  if(currentInsightFilter!=='All')ins=ins.filter(d=>d.Priority===currentInsightFilter);
+  document.getElementById('insightCards').innerHTML=ins.map(d=>{
+    const prio=PRIORIDAD[d.Priority]||d.Priority;
+    const cls=d.Priority==='High'?'weakness':d.Priority==='Medium'?'ok':'strength';
+    return`<div class="card priority-${d.Priority}">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="pill ${cls}">${prio}</span>
+        <span class="text-xs text-gray-500">${d.Category} · ${d.Location.replace('LasCatalinas','Las Catalinas')}</span>
+      </div>
+      <p class="text-sm font-medium text-gray-800 mb-2">${d.Insight}</p>
+      <div class="text-xs text-gray-600 bg-gray-50 rounded p-2">
+        <span class="font-semibold text-green-700">Acción:</span> ${d.Action}
+      </div>
+    </div>`;
+  }).join('')||'<p class="text-gray-400 col-span-2 text-center py-8">Sin insights para este filtro.</p>';
+}
+
+// ═══════════════════════════════
+// Social signals
+// ═══════════════════════════════
+function renderSocial(){
+  const eng=DATA.instagramEngagement;
+  const {yr,mo}=getFilters();
+  const years=[...new Set(eng.map(d=>d.Year))].sort();
+  const types=[...new Set(eng.map(d=>d.Type))];
+  const typeColors={'Image':'#2d6a4f','Video':'#52b788','Sidecar':'#95d5b2','GraphSidecar':'#95d5b2'};
+  const typeLabels={'Image':'Imagen','Video':'Video','Sidecar':'Carrusel','GraphSidecar':'Carrusel'};
+
+  const datasets=types.map((tp,i)=>({
+    label:typeLabels[tp]||tp,
+    data:years.map(y=>{const r=eng.find(d=>d.Year===y&&d.Type===tp);return r?parseInt(r.PostCount):0;}),
+    backgroundColor:typeColors[tp]||COLORS[i],stack:'posts'
+  }));
+  mkChart('igYearChart',{
+    type:'bar',data:{labels:years,datasets},
+    options:{plugins:{legend:{position:'bottom'}},scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true}}}
+  });
+
+  const typeCounts=types.map(tp=>eng.filter(d=>d.Type===tp).reduce((s,d)=>s+parseInt(d.PostCount),0));
+  mkChart('igTypeChart',{
+    type:'doughnut',
+    data:{labels:types.map(tp=>typeLabels[tp]||tp),datasets:[{data:typeCounts,backgroundColor:COLORS}]},
+    options:{plugins:{legend:{position:'bottom'}}}
+  });
+
+  // Filtered tables
+  const posts=filteredPosts().sort((a,b)=>parseInt(b.Likes)-parseInt(a.Likes)).slice(0,20);
+  document.getElementById('topPostsBody').innerHTML=posts.map(p=>`
+    <tr class="border-b hover:bg-gray-50">
+      <td class="py-1 pr-2">${p.Date?p.Date.substring(0,10):''}</td>
+      <td class="py-1 pr-2">${p.Type}</td>
+      <td class="py-1 pr-2 text-center font-bold">${parseInt(p.Likes).toLocaleString('es')}</td>
+      <td class="py-1 text-center">${parseInt(p.Comments).toLocaleString('es')}</td>
+    </tr>`).join('')||'<tr><td colspan="4" class="py-4 text-center text-gray-400">Sin publicaciones para este período.</td></tr>';
+
+  const comments=filteredComments().sort((a,b)=>parseInt(b.Likes)-parseInt(a.Likes)).slice(0,20);
+  document.getElementById('topCommentsList').innerHTML=comments.map(c=>`
+    <div class="border-b py-2">
+      <div class="flex justify-between">
+        <span class="text-xs font-semibold text-gray-700">@${c.Username}</span>
+        <span class="text-xs text-gray-400">${c.Likes} ❤ · ${c.Date}</span>
+      </div>
+      <p class="text-sm text-gray-600 mt-0.5">${c.CommentText}</p>
+    </div>`).join('')||'<p class="text-center text-gray-400 py-4">Sin comentarios para este período.</p>';
+}
+
+// ═══════════════════════════════
+// Render all
+// ═══════════════════════════════
+function renderAll(){
+  renderKPIs();
+  renderOverviewCharts();
+  renderYearTrend();
+  renderRatingDist();
+  renderMenu();
+  renderSourceTable();
+  renderThemes();
+  renderInsights();
+  renderSocial();
+}
+
+// ─── Init ───
+document.getElementById('metaLine').textContent=
+  `${DATA.meta.totalReviews} reseñas · ${DATA.meta.totalInstagramPosts} publicaciones · ${DATA.meta.generatedAt}`;
+// Activate first location button
+document.querySelectorAll('.loc-btn')[0].style.background='#2d6a4f';
+document.querySelectorAll('.loc-btn')[0].style.color='#fff';
+document.querySelectorAll('.loc-btn')[0].style.borderColor='#2d6a4f';
+renderAll();
+</script>
+</body>
+</html>

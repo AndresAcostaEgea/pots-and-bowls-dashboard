@@ -1,0 +1,7 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Raw data files (large / sensitive)
+*.csv
+*.ps1
