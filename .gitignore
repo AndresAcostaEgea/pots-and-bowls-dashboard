@@ -5,3 +5,11 @@ Thumbs.db
 # Raw data files (large / sensitive)
 *.csv
 *.ps1
+
+# Secrets — never commit these
+.env
+.env.local
+.env*.local
+
+# Node
+node_modules/
